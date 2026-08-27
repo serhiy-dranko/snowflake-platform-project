@@ -30,12 +30,14 @@ GRANT USAGE ON SCHEMA snowflake_platform_project.raw TO ROLE analyst_readonly;
 GRANT USAGE ON WAREHOUSE project_wh TO ROLE data_engineer;
 GRANT USAGE ON WAREHOUSE project_wh TO ROLE analyst_readonly;
 
-GRANT CREATE TABLE, CREATE STAGE, CREATE FILE FORMAT
+GRANT CREATE TABLE, CREATE STAGE, CREATE FILE FORMAT, CREATE STREAM, CREATE TASK, CREATE PIPE -- upd day 3
   ON SCHEMA snowflake_platform_project.raw TO ROLE data_engineer;
 
 -- future grants: anything created in raw from now on is auto-readable by analyst_readonly
 GRANT SELECT ON FUTURE TABLES IN SCHEMA snowflake_platform_project.raw
   TO ROLE analyst_readonly;
+
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE data_engineer; -- upd day 3
 
 -- Status Statement executed successfully.
 
