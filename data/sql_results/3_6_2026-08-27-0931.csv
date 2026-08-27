@@ -1,0 +1,2 @@
+file,status,rows_parsed,rows_loaded,error_limit,errors_seen,first_error,first_error_line,first_error_character,first_error_column_name
+raw_stage/raw_orders_batch2.csv,LOADED,50000,50000,50000,0,,,,

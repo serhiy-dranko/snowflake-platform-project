@@ -1,0 +1,2 @@
+created_on,name,database_name,schema_name,owner,comment,table_name,source_type,base_tables,type,stale,mode,stale_after,invalid_reason,owner_role_type
+2026-08-26 06:06:20.368 -0700,ORDERS_STREAM,SNOWFLAKE_PLATFORM_PROJECT,RAW,DATA_ENGINEER,,SNOWFLAKE_PLATFORM_PROJECT.RAW.RAW_ORDERS,Table,SNOWFLAKE_PLATFORM_PROJECT.RAW.RAW_ORDERS,DELTA,false,DEFAULT,2026-09-09 06:06:54.668 -0700,N/A,ROLE
