@@ -9,16 +9,33 @@ snowflake-platform-project/
 ├── README.md
 ├── sql/
 │   ├── day1_setup_and_load.sql
-│   └── day2_variant_and_time_travel.sql
+│   ├── day2_variant_and_time_travel.sql
+│   └── day_3_steam_task_execute_task_pipe.sql
 └── data/
 │   ├── late_orders.csv                    (sample file with deliberate bad rows)
-│   └── raw_order_items.json               (nested JSON: orders → items → modifiers)
+│   ├── raw_order_items.json               (nested JSON: orders → items → modifiers)
+│   ├── raw_orders_batch2.csv              (50K rows, deliberate schema drift)
+│   └── sql_results/
+│        ├── 3_2_2026-08-26-1509.csv
+│        ├── 3_3_2026-08-26-1517.csv
+│        ├── 3_5_2026-08-26-2041.csv
+│        └── 3_6_2026-08-27-0931.csv
 └── screenshots/
     ├── day_1/
     │   ├── analyst_readonly_failing.png   (proof that analyst role has permission only for Select)
     │   ├── raw_customers.png              (count of rows in table)
     │   └── raw_orders.png                 (count of rows in table)
     └── day_2/
+        ├── bug_count.png
+        ├── dev_orders_change.png
+        ├── dev_orders_check.png
+        ├── history_check.png
+        ├── one_level_items.png
+        ├── two_levels_items.png
+        ├── query_history.png
+        ├── raw_orders_check.png
+        ├── retention_days_check.png
+        └── time_travel_recovery.png
 
 ```
 
@@ -93,3 +110,56 @@ snowflake-platform-project/
 count from 500,278 back to 0, clone divergence test passed, retention window documented.
 
 ---
+
+## Day 3 — Streams, Task DAGs, Snowpipe
+
+**Built:**
+- Standard stream `orders_stream` on `raw_orders`, proven to distinguish inserts from updates via
+  `METADATA$ACTION`/`METADATA$ISUPDATE`
+- A Task DAG: `root_process_orders_stream` (scheduled, `MERGE`s the stream into
+  `orders_status_summary`) → `child_log_summary_change` (`AFTER` the root, logs a snapshot into
+  `summary_change_log`) — confirmed sequential via `TASK_HISTORY` (child's `scheduled_time` ==
+  root's `completed_time`)
+- A second, independent task (`root_flag_status_anomalies`) fanned out for a different concern
+  (flagging orders that jumped straight to `delivered`), on its **own** stream
+- `SYSTEM$STREAM_HAS_DATA` checked before/after generating changes (`FALSE` → `TRUE`), stream
+  `STALE` status and `RETENTION_TIME` (1 day) checked and connected
+- `broken_task` deliberately failed 3 times, real `ERROR_MESSAGE` read from `TASK_HISTORY`,
+  confirmed auto-suspend via `SUSPEND_TASK_AFTER_NUM_FAILURES = 3`
+- Schema drift in `raw_orders_batch2.csv` (renamed `status`→`order_status`, new `channel` column)
+  detected before loading; **Option A (widen the target table)** chosen — the drift was small and
+  well-understood, so `ALTER TABLE ADD COLUMN` + positional `COPY INTO` mapping was simpler than
+  staging + reconciling separately. 50,000/50,000 rows loaded, 0 errors.
+- `batch2_pipe` created, triggered via `ALTER PIPE ... REFRESH`, confirmed via
+  `SYSTEM$PIPE_STATUS` and `COPY_HISTORY` filtered by `PIPE_NAME`
+
+**Real issues hit and fixed (this was the hardest day by a wide margin):**
+- Day 1's grants never covered `CREATE STREAM` / `CREATE TASK` / `CREATE PIPE` — had to be granted
+  on the schema as `ACCOUNTADMIN` before any of today's objects could be created.
+- `EXECUTE TASK` is a separate, **account-level** privilege (`GRANT EXECUTE TASK ON ACCOUNT`) —
+  granting it on a schema fails outright (`Invalid object type 'SCHEMA' for privilege
+  'EXECUTE TASK'`). Without it, a role can create a task but never actually run it.
+- **`CHILD_BECAME_ROOT`**: dropping and recreating a root task to fix a bug silently detaches any
+  child task pointing at it via `AFTER` — the child's `predecessors` becomes `[]` and it
+  auto-suspends. Recreating the root under the same name does *not* restore the link; the child
+  must be dropped and recreated too. Any DAG edit requires suspending the root first
+  (`Unable to update graph ... since that root task is not suspended`).
+- **One stream cannot serve two independent consumers.** The checklist implies fan-out "just
+  works" off a shared stream; it doesn't — whichever task consumes it first advances the offset for
+  everyone, so the second task sees nothing (confirmed via `SYSTEM$STREAM_HAS_DATA` returning
+  `FALSE` for the second reader). Fixed by giving the anomaly-detection task its own stream
+  (`anomaly_stream`) on the same table.
+- **A pipe's `COPY INTO FROM @stage` scans the whole stage, not one file**, and tracks
+  already-loaded files per-pipe rather than per-stage. A brand-new pipe re-ingested Day 1's
+  `late_orders.csv` (still sitting on `raw_stage`) as "new to it," producing duplicate rows,
+  while the just-loaded `raw_orders_batch2.csv` was correctly skipped as already loaded. Lesson:
+  keep a pipe's watched stage clean (move/remove processed files, or use subfolders) — a shared
+  stage with old files on it is a live footgun for any new pipe pointed at it.
+- The task-checklist material itself had gaps beyond the grants above: `summary_change_log`'s DDL
+  was referenced but never given, and `INFORMATION_SCHEMA.TASK_HISTORY()` needs an explicit `WHERE`
+  filter or every Snowflake-internal system task floods the result.
+
+**Result:** full DAG proven sequential end-to-end, fan-out working correctly once each consumer had
+its own stream, one task's failure-and-auto-suspend behavior confirmed with the real error text,
+and the batch-2 schema drift loaded cleanly through both a manual `COPY INTO` and Snowpipe.
+
