@@ -1,0 +1,22 @@
+QUERY_ID,QUERY_TEXT,TOTAL_ELAPSED_TIME,BYTES_SPILLED_TO_LOCAL_STORAGE,BYTES_SPILLED_TO_REMOTE_STORAGE
+01c6ab69-0108-0fb2-0005-4c7a001dffd2,SELECT * FROM snowflake_sample_data.tpch_sf100.lineitem;,186023,0,0
+01c6ab6f-0108-0de0-0005-4c7a001e8682,"SELECT * FROM snowflake_sample_data.tpch_sf100.lineitem
+LIMIT 15000000;",11507,0,0
+01c6ab6e-0108-0fb2-0005-4c7a001dfff6,"SELECT * FROM snowflake_sample_data.tpch_sf10.lineitem
+LIMIT 15000000;",9831,0,0
+01c6afe7-0108-13f0-0005-4c7a001f588e,"SELECT query_id, query_text, total_elapsed_time, bytes_spilled_to_local_storage,
+       bytes_spilled_to_remote_storage
+FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+WHERE warehouse_name IN ('SCALE_UP_TEST_WH', 'PROJECT_WH', 'CONCURRENCY_TEST_WH')
+ORDER BY start_time DESC
+LIMIT 10;",5576,0,0
+01c6a971-0108-0fb3-0005-4c7a001dc0ee,"MERGE INTO orders_status_summary tgt
+  USING (
+    SELECT status, COUNT(*) AS cnt
+    FROM orders_stream
+    GROUP BY status
+  ) src
+  ON tgt.status = src.status
+  WHEN MATCHED THEN UPDATE SET order_count = src.cnt, last_updated = CURRENT_TIMESTAMP()
+  WHEN NOT MATCHED THEN INSERT (status, order_count, last_updated)
+    VALUES (src.status, src.cnt, CURRENT_TIMESTAMP())",4879,0,0
