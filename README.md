@@ -4,6 +4,8 @@ A five-day, hands-on build of a small but complete Snowflake platform at 14th We
 streaming ingestion, semi-structured data, a reactive Stream/Task/Snowpipe pipeline, and a
 performance-and-cost pass at real TPC-H scale.
 
+![Architecture](https://github.com/serhiy-dranko/snowflake-platform-project/blob/main/screenshots/architecture.png)
+
 ## Environment
 
 - Database: `SNOWFLAKE_PLATFORM_PROJECT`, schema `RAW`
